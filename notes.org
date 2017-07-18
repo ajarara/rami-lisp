@@ -3,3 +3,7 @@ C is explicitly typed.
 C is terminated by semicolons;
 Declaring.
 Does C not have booleans? x > 10 && x < 100 for x = 3 is 0?
+It does not.
+
+
+
