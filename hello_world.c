@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 /* 
 OT: every time I think about how pretty this 
 color scheme is, I think of this post:
@@ -15,10 +16,9 @@ void talk() {
 };
 
 int main(int argc, char** argv) {
-  for (int i=0; i < argc; i++) {
-    
-    printf("%s\n", argv[i]);
-    /* talk(); */
+  long count = atoi(argv[1]);
+  for (int i=0; i < count; i++) {
+    talk();
   };
   return 0;
 };
