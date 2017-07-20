@@ -158,11 +158,12 @@ void lval_println(lval* v) {
   putchar('\n');
 }
 
+
 lval* lval_pop(lval* v, int i) {
   /* get out the item at position i */
   lval* x = v->cell[i];
   /* shift memory after the... what?! */
-  memmove(&v->cell, &v->cell[i+1],
+  memmove(&v->cell[i], &v->cell[i+1],
           sizeof(lval*) * (v->count-i-1));
   v->count--;
   /* realloc? I need to figure out what all this is doing. */
