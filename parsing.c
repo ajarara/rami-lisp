@@ -18,7 +18,7 @@ typedef struct lval {
   long num;
   char* err;
   char* sym;
-  /* reference counting? */
+  /* not reference counting, just the length of the list. */
   int count;
   /* is the struct keyword necessary here? */
   struct lval** cell;
@@ -88,7 +88,7 @@ lval* lval_read_num(mpc_ast_t* t) {
 }
 
 
-/* Is this reference counting? what's with the third line?  */
+/* what's with the third line? */
 lval* lval_add(lval* v, lval* x) {
   v->count++;
   v->cell = realloc(v->cell, sizeof(lval*) * v->count);
@@ -153,57 +153,142 @@ void lval_print(lval* v) {
 }
 
 
-  
-/* lval eval_op(lval x, char* op, lval y) { */
-/*   if (x.type == LVAL_ERR) { return x; } */
-/*   if (y.type == LVAL_ERR) { return y; } */
-  
-
-/*   /\* can't do cases on strs? *\/ */
-/*   if (strcmp(op, "+") == 0) { return lval_num(x.num + x.num); } */
-/*   if (strcmp(op, "-") == 0) { return lval_num(x.num - x.num); } */
-/*   if (strcmp(op, "*") == 0) { return lval_num(x.num * x.num); } */
-/*   if (strcmp(op, "/") == 0) { */
-/*     if (y.num == 0) { */
-/*       return lval_err(LERR_DIV_ZERO); */
-/*     } else { */
-/*       return lval_num(x.num / y.num); */
-/*     } */
-/*   } */
-
-/*   return lval_err(LERR_BAD_OP); */
-/* } */
- 
-
-/* lval eval(mpc_ast_t* t) { */
-/*   if (strstr(t->tag, "number")) { */
-/*     errno = 0; */
-/*     long x = strtol(t->contents, NULL, 10); */
-/*     return errno != ERANGE ? lval_num(x): lval_err(LERR_BAD_NUM); */
-/*   } */
-/*   /\* Everything else in our language so far is an expression *\/ */
-
-  
-/*   char* op = t->children[1]->contents; */
-/*   lval x = eval(t->children[2]); */
-  
-
-/*   int i = 3; */
-/*   while(strstr(t->children[i]->tag, "expr")) { */
-/*     x = eval_op(x, op, eval(t->children[i])); */
-/*     i++; */
-/*   } */
-    
-/*   return x; */
-/* } */
-
-  
 void lval_println(lval* v) {
   lval_print(v);
   putchar('\n');
 }
-  
 
+lval* lval_pop(lval* v, int i) {
+  /* get out the item at position i */
+  lval* x = v->cell[i];
+  /* shift memory after the... what?! */
+  memmove(&v->cell, &v->cell[i+1],
+          sizeof(lval*) * (v->count-i-1));
+  v->count--;
+  /* realloc? I need to figure out what all this is doing. */
+  v->cell = realloc(v->cell, sizeof(lval*) * v->count);
+  return x;
+}
+
+lval* lval_take(lval* v, int i) {
+  lval* x = lval_pop(v, i);
+  lval_del(v);
+  return x;
+}
+
+lval* builtin_op(lval* a, char* op) {
+  /*  */
+  for (int i = 0; i < a->count; i++) {
+    if (a->cell[i]->type != LVAL_NUM) {
+      lval_del(a);
+      return lval_err("One of the arguments given is not a number!");
+    }
+  }
+
+  lval* x = lval_pop(a, 0);
+
+  /* this is intended to handle these cases:
+   (+ 5) => 5
+   (- 5) => -5
+   (/ 5) => 1/5 which _might_ round to 0, which will make me sad
+   (* 5) => 5
+  */
+  if (a->count == 0) {
+    
+    /* no reason to perform this check if it's a no op */
+    /* will this be compiled out? */
+    if (strcmp(op, "+") == 0) {
+      ;
+    }
+    if (strcmp(op, "-") == 0) {
+      /* negate me! */
+      x->num -= -x->num;
+    }
+    /* also no op */
+    if (strcmp(op, "*") == 0) {
+      ;
+    }
+    if(strcmp(op, "/") == 0) {
+      /* initially I took this check out into its own void function
+         but the problem is that this behavior is fundamentally different 
+         so I kept it inlined. */
+      if (x->num == 0) {
+        lval_del(x);
+        x = lval_err("Division By Zero!");
+      } else {
+        x->num = 1 / x->num;
+      }
+    }
+  }
+
+  /* hmm why not put this in an else block? */
+  while (a->count > 0) {
+    lval* y = lval_pop(a, 0);
+    
+    /* Introductory comment */
+    if (strcmp(op, "+") == 0) { x->num += y->num; }
+    if (strcmp(op, "-") == 0) { x->num -= y->num; }
+    if (strcmp(op, "*") == 0) { x->num *= y->num; }
+    if (strcmp(op, "/") == 0) {
+      if (y->num == 0 ) {
+        lval_del(x);
+        x = lval_err("Division By Zero!");
+      } else {
+        x->num /= y->num;
+      }
+    }
+    lval_del(y);
+  }
+  lval_del(a);
+  return x;
+}
+
+lval* lval_eval(lval* v);
+    
+lval* lval_eval_expr(lval* v) {
+
+  /* Evaluate the children. Give them a grade. 
+     Tell their parents they've been skipping classes. */
+  for (int i = 0; i < v->count; i++) {
+    v->cell[i] = lval_eval(v->cell[i]);
+  }
+
+  /* if any yield an error, pass the first error to lval_take */
+  for (int i =0; i < v->count; i++) {
+    if (v->cell[i]->type == LVAL_ERR) {
+      return lval_take(v, i);
+    }
+  }
+
+  /* Empty expression */
+  if (v->count == 0) { return v; }
+
+  /* Hmm so lval_take isn't a error handling function but a repr function */
+  if (v->count == 1) { return lval_take(v, 0); }
+
+  /* 
+     inspect first child and assert it's a symbol
+     this is probably where we would put in quoting later on. 
+  */
+  lval* f = lval_pop(v, 0);
+  if (f->type != LVAL_SYM) {
+    lval_del(f);
+    lval_del(v);
+    return lval_err("S-expression does not start with symbol!");
+  }
+
+  /* okay, return the result. */
+  lval* result = builtin_op(v, f->sym);
+  lval_del(f);
+  return result;
+}
+
+lval* lval_eval(lval* v) {
+  if (v->type == LVAL_SEXPR) {
+    return lval_eval_expr(v);
+  }
+  return v;
+}
 
 int main(int argc, char** argv) {
   mpc_parser_t* Number    = mpc_new("number");
@@ -230,7 +315,7 @@ int main(int argc, char** argv) {
 
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, Lispy, &r)) {
-      lval* x = lval_read(r.output);
+      lval* x = lval_eval(lval_read(r.output));
       lval_println(x);
       lval_del(x);
       
