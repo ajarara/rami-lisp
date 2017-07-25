@@ -203,7 +203,7 @@ lval* builtin_op(lval* a, char* op) {
     }
     if (strcmp(op, "-") == 0) {
       /* negate me! */
-      x->num -= -x->num;
+      x->num = -x->num;
     }
     /* also no op */
     if (strcmp(op, "*") == 0) {
