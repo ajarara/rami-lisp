@@ -163,6 +163,7 @@ lval* lval_pop(lval* v, int i) {
   /* get out the item at position i */
   lval* x = v->cell[i];
   /* shift memory after the... what?! */
+  /* figured out the problem: I was writing to &v->cell which is a pointer (since **lval */
   memmove(&v->cell[i], &v->cell[i+1],
           sizeof(lval*) * (v->count-i-1));
   v->count--;
@@ -199,7 +200,6 @@ lval* builtin_op(lval* a, char* op) {
     /* no reason to perform this check if it's a no op */
     /* will this be compiled out? */
     if (strcmp(op, "+") == 0) {
-      ;
     }
     if (strcmp(op, "-") == 0) {
       /* negate me! */
@@ -207,7 +207,6 @@ lval* builtin_op(lval* a, char* op) {
     }
     /* also no op */
     if (strcmp(op, "*") == 0) {
-      ;
     }
     if(strcmp(op, "/") == 0) {
       /* initially I took this check out into its own void function
