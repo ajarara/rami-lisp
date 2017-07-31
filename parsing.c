@@ -308,7 +308,7 @@ int main(int argc, char** argv) {
   puts("Press C-c to exit");
 
   while (1) {
-    char* input = readline("lispy> ");
+    char* input = readline("🙀> ");
 
     add_history(input);
 
