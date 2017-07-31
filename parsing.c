@@ -225,7 +225,6 @@ lval* builtin_op(lval* a, char* op) {
   while (a->count > 0) {
     lval* y = lval_pop(a, 0);
     
-    /* Introductory comment */
     if (strcmp(op, "+") == 0) { x->num += y->num; }
     if (strcmp(op, "-") == 0) { x->num -= y->num; }
     if (strcmp(op, "*") == 0) { x->num *= y->num; }
