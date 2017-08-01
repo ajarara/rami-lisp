@@ -101,11 +101,10 @@ lval* lval_read_num(mpc_ast_t* t) {
 }
 
 
-lval* lval_add(lval* v, lval* x) {
+void lval_add(lval* v, lval* x) {
   v->count++;
   v->cell = realloc(v->cell, sizeof(lval*) * v->count);
   v->cell[v->count-1] = x;
-  /* return v; */
 }
 
 
