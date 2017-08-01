@@ -7,6 +7,9 @@
 #include <readline/history.h>
 /* #include <editline/history.h> */
 
+#define LASSERT(args, cond, err) \
+  if (!(cond)) { lval_del(args); return lval_err(err); }
+
 
 
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR};
@@ -98,7 +101,6 @@ lval* lval_read_num(mpc_ast_t* t) {
 }
 
 
-/* what's with the third line? */
 lval* lval_add(lval* v, lval* x) {
   v->count++;
   v->cell = realloc(v->cell, sizeof(lval*) * v->count);
@@ -178,12 +180,10 @@ void lval_println(lval* v) {
 lval* lval_pop(lval* v, int i) {
   /* get out the item at position i */
   lval* x = v->cell[i];
-  /* shift memory after the... what?! */
-  /* figured out the problem: I was writing to &v->cell which is a pointer (since **lval */
   memmove(&v->cell[i], &v->cell[i+1],
           sizeof(lval*) * (v->count-i-1));
   v->count--;
-  /* realloc? I need to figure out what all this is doing. */
+  
   v->cell = realloc(v->cell, sizeof(lval*) * v->count);
   return x;
 }
@@ -192,6 +192,71 @@ lval* lval_take(lval* v, int i) {
   lval* x = lval_pop(v, i);
   lval_del(v);
   return x;
+}
+
+/* BUILTIN OPERATIONS */
+
+lval* lval_join(lval* x, lval* y) {
+  while (y->count) {
+    lval_add(x, lval_pop(y, 0));
+  }
+  lval_del(y);
+  return x;
+}
+
+
+lval* builtin_join(lval* a) {
+  for (int i = 0; i < a->count; i++) {
+    LASSERT(a, a->cell[i]-> type == LVAL_QEXPR,
+            "Function 'join' passed incorrect type!");
+  }
+
+  lval* x = lval_pop(a, 0);
+
+  while(a->count) {
+    x = lval_join(x, lval_pop(a, 0));
+  }
+
+  lval_del(a);
+  return x;
+}
+
+
+lval* builtin_car(lval* a) {
+  LASSERT(a, a->count == 1,
+          "Function 'car' passed too many arguments!");
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+          "Function 'car' was not passed a list!");
+  LASSERT(a, a->cell[0]->count != 0,
+          "Function 'car' passed an empty list!");
+
+  lval* v = lval_take(a, 0);
+  
+  while (v->count > 1) {
+    lval_del(lval_pop(v, 1));
+  }
+  return v;
+}
+
+
+lval* builtin_cdr(lval* a) {
+  LASSERT(a, a->count == 1,
+          "Function 'cdr' passed too many arguments!");
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+          "Function 'cdr' passed too many arguments!");
+  LASSERT(a, a->cell[0]->count != 0,
+          "Function 'cdr' passed an empty list!");
+
+  lval* v = lval_take(a, 0);
+
+  lval_del(lval_pop(v, 0));
+  return v;
+}
+
+
+lval* builtin_list(lval* a) {
+  a->type = LVAL_QEXPR;
+  return a;
 }
 
 lval* builtin_op(lval* a, char* op) {
@@ -246,8 +311,10 @@ lval* builtin_op(lval* a, char* op) {
     if (strcmp(op, "*") == 0) { x->num *= y->num; }
     if (strcmp(op, "/") == 0) {
       if (y->num == 0 ) {
-        lval_del(x);
-        x = lval_err("Division By Zero!");
+        /* you could omit the break here, but you'd also have to
+        remove the lval_del(y) call to avoid the double free. */
+        lval_del(x); lval_del(y);
+        x = lval_err("Division By Zero!"); break;
       } else {
         x->num /= y->num;
       }
@@ -258,6 +325,9 @@ lval* builtin_op(lval* a, char* op) {
   return x;
 }
 
+/* END OPERATIONS */
+
+lval* builtin(lval* a, char* func);
 lval* lval_eval(lval* v);
     
 lval* lval_eval_expr(lval* v) {
@@ -293,7 +363,7 @@ lval* lval_eval_expr(lval* v) {
   }
 
   /* okay, return the result. */
-  lval* result = builtin_op(v, f->sym);
+  lval* result = builtin(v, f->sym);
   lval_del(f);
   return result;
 }
@@ -305,6 +375,35 @@ lval* lval_eval(lval* v) {
   return v;
 }
 
+
+lval* builtin_eval(lval* a) {
+  LASSERT(a, a->count == 1,
+          "Function 'eval' passed too many arguments!");
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+          "Function 'eval' passed incorrect type!");
+
+  lval* x = lval_take(a, 0);
+  x->type = LVAL_SEXPR;
+  return lval_eval(x);
+}
+
+
+lval* builtin(lval* a, char* func) {
+  if (strcmp(func, "eval") == 0) { return builtin_eval(a); }
+  if (strcmp(func, "join") == 0) { return builtin_join(a); }
+  if (strcmp(func, "car") == 0) { return builtin_car(a); }
+  if (strcmp(func, "cdr") == 0) { return builtin_cdr(a); }
+  if (strcmp(func, "list") == 0) { return builtin_list(a); }
+  if (strcmp(func, "+") == 0 || strcmp(func, "-") == 0 ||
+      strcmp(func, "/") == 0 || strcmp(func, "*") == 0) {
+    return builtin_op(a, func);
+  }
+  lval_del(a);
+  return lval_err("Unknown Function!");
+      
+}
+
+
 int main(int argc, char** argv) {
   mpc_parser_t* Number    = mpc_new("number");
   mpc_parser_t* Symbol    = mpc_new("symbol");
@@ -314,15 +413,16 @@ int main(int argc, char** argv) {
   mpc_parser_t* Lispy     = mpc_new("lispy");
   
   mpca_lang(MPCA_LANG_DEFAULT,
-            "                                          \
-    number : /-?[0-9]+/ ;                    \
-    symbol : '+' | '-' | '*' | '/' ;         \
-    sexpr  : '(' <expr>* ')' ;               \
-    qexpr  : '{' <expr>* '}' ;               \
-    expr   : <number> | <symbol> | <sexpr> | <qexpr> ; \
-    lispy  : /^/ <expr>* /$/ ;               \
+            "                                           \
+    number : /-?[0-9]+/ ;                               \
+    symbol : \"eval\" | \"join\" | \"cdr\" | \"car\"    \
+           | \"list\" | '+' | '-' | '*' | '/' ;         \
+    sexpr  : '(' <expr>* ')' ;                          \
+    qexpr  : '{' <expr>* '}' ;                          \
+    expr   : <number> | <symbol> | <sexpr> | <qexpr> ;  \
+    lispy  : /^/ <expr>* /$/ ;                          \
   ", Number, Symbol, Sexpr, Qexpr, Expr, Lispy);
-  puts("Lispy Version 0.0.0.2");
+  puts("Rami-lisp version 0.0.0.3");
   puts("Press C-c to exit");
 
   while (1) {
