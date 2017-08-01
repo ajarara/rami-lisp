@@ -105,7 +105,7 @@ lval* lval_add(lval* v, lval* x) {
   v->count++;
   v->cell = realloc(v->cell, sizeof(lval*) * v->count);
   v->cell[v->count-1] = x;
-  return v;
+  /* return v; */
 }
 
 
@@ -131,7 +131,7 @@ lval* lval_read(mpc_ast_t* t) {
     if (strcmp(t->children[i]->contents, "[") == 0) { continue; }
     if (strcmp(t->children[i]->contents, "]") == 0) { continue; }
     if (strcmp(t->children[i]->tag, "regex") == 0) { continue; }
-    x = lval_add(x, lval_read(t->children[i]));
+    lval_add(x, lval_read(t->children[i]));
   }
   return x;
 }
@@ -161,7 +161,6 @@ void lval_print(lval* v) {
     printf("%s", v->sym);
     break;
   case LVAL_SEXPR:
-    /* recurse */
     lval_expr_print(v, '(', ')');
     break;
   case LVAL_QEXPR:
@@ -252,7 +251,6 @@ lval* builtin_cdr(lval* a) {
   lval_del(lval_pop(v, 0));
   return v;
 }
-
 
 lval* builtin_list(lval* a) {
   a->type = LVAL_QEXPR;
@@ -415,8 +413,7 @@ int main(int argc, char** argv) {
   mpca_lang(MPCA_LANG_DEFAULT,
             "                                           \
     number : /-?[0-9]+/ ;                               \
-    symbol : \"eval\" | \"join\" | \"cdr\" | \"car\"    \
-           | \"list\" | '+' | '-' | '*' | '/' ;         \
+    symbol : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;         \
     sexpr  : '(' <expr>* ')' ;                          \
     qexpr  : '[' <expr>* ']' ;                          \
     expr   : <number> | <symbol> | <sexpr> | <qexpr> ;  \
@@ -433,7 +430,9 @@ int main(int argc, char** argv) {
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, Lispy, &r)) {
       lval* x = lval_eval(lval_read(r.output));
+      
       lval_println(x);
+
       lval_del(x);
       
       mpc_ast_delete(r.output);
