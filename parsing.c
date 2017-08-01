@@ -12,7 +12,7 @@
 
 
 
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR};
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_NIL};
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
 /* notice the initial reference to lval. What does that do? */
@@ -26,6 +26,12 @@ typedef struct lval {
   /* is the struct keyword necessary here? */
   struct lval** cell;
 } lval;
+
+lval* lval_nil(void) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_NIL;
+  return v;
+}
 
 lval* lval_num(long x) {
   lval* v = malloc(sizeof(lval));
@@ -72,6 +78,7 @@ lval* lval_qexpr(void) {
 
 void lval_del(lval* v) {
   switch (v->type) {
+  case LVAL_NIL:
   case LVAL_NUM:
     break;
   case LVAL_ERR:
@@ -114,8 +121,8 @@ lval* lval_read(mpc_ast_t* t) {
 
   lval* x = NULL;
 
-  /* root? like the prompt? kinda hacky */
-  if (strcmp(t->tag, ">") == 0) { x = lval_sexpr(); }
+  /* hm why tag this? why not just ignore it? */
+  if (strcmp(t->tag, ">") == 0) { x = lval_nil(); }
   if (strstr(t->tag, "sexpr")) { x = lval_sexpr(); }
   if (strstr(t->tag, "qexpr")) { x = lval_qexpr(); }
   
@@ -164,6 +171,9 @@ void lval_print(lval* v) {
     break;
   case LVAL_QEXPR:
     lval_expr_print(v, '[', ']');
+    break;
+  case LVAL_NIL:
+    printf("nil");
     break;
   }
 }
@@ -402,22 +412,25 @@ lval* builtin(lval* a, char* func) {
 
 
 int main(int argc, char** argv) {
+  mpc_parser_t* Nil       = mpc_new("nil");
   mpc_parser_t* Number    = mpc_new("number");
   mpc_parser_t* Symbol    = mpc_new("symbol");
   mpc_parser_t* Sexpr     = mpc_new("sexpr");
   mpc_parser_t* Qexpr     = mpc_new("qexpr");
   mpc_parser_t* Expr      = mpc_new("expr");
   mpc_parser_t* Lispy     = mpc_new("lispy");
+
   
   mpca_lang(MPCA_LANG_DEFAULT,
             "                                           \
+    nil    : /nil/ ;                                    \
     number : /-?[0-9]+/ ;                               \
     symbol : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;         \
     sexpr  : '(' <expr>* ')' ;                          \
     qexpr  : '[' <expr>* ']' ;                          \
     expr   : <number> | <symbol> | <sexpr> | <qexpr> ;  \
     lispy  : /^/ <expr>* /$/ ;                          \
-  ", Number, Symbol, Sexpr, Qexpr, Expr, Lispy);
+  ", Nil, Number, Symbol, Sexpr, Qexpr, Expr, Lispy);
   puts("Rami-lisp version 0.0.0.3");
   puts("Press C-c to exit");
 
@@ -428,10 +441,9 @@ int main(int argc, char** argv) {
 
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, Lispy, &r)) {
+      /* we don't print the empty expr */
       lval* x = lval_eval(lval_read(r.output));
-      
       lval_println(x);
-
       lval_del(x);
       
       mpc_ast_delete(r.output);
@@ -442,7 +454,8 @@ int main(int argc, char** argv) {
     }
     free(input);
   }
-  mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Lispy);
+    
+  mpc_cleanup(7, Nil, Number, Symbol, Sexpr, Qexpr, Expr, Lispy);
 
   return 0;
 }
