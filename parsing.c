@@ -15,16 +15,15 @@
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR};
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
-/* notice the initial reference to lval. What does that do? */
-typedef struct lval {
+typedef struct __lval {
   int type;
   long num;
   char* err;
   char* sym;
-  /* not reference counting, just the length of the list. */
   int count;
-  /* is the struct keyword necessary here? */
-  struct lval** cell;
+  /* the reason the struct keyword is necessary here is because within
+  the struct it hasn't been defined as a type yet.*/
+  struct __lval** cell;
 } lval;
 
 lval* lval_num(long x) {
