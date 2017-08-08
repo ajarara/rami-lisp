@@ -12,19 +12,32 @@
 
 
 
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR};
+
+/* data types */
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM,
+       LVAL_FUN, LVAL_SEXPR, LVAL_QEXPR};
+/* errors */
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
-typedef struct __lval {
+
+typedef struct _lval {
   int type;
+  
   long num;
   char* err;
   char* sym;
   int count;
   /* the reason the struct keyword is necessary here is because within
-  the struct it hasn't been defined as a type yet.*/
-  struct __lval** cell;
+  the struct it hasn't been typedef'd yet.*/
+  struct _lval** cell;
 } lval;
+
+typedef struct _lenv {
+  char *symbol;
+  void *value;
+} lenv;
+
+typedef lval*(*lbuiltin)(lenv*, lval*);
 
 lval* lval_num(long x) {
   lval* v = malloc(sizeof(lval));
