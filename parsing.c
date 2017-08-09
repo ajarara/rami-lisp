@@ -22,7 +22,6 @@ enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
 typedef struct _lval {
   int type;
-  
   long num;
   char* err;
   char* sym;
@@ -33,11 +32,38 @@ typedef struct _lval {
 } lval;
 
 typedef struct _lenv {
-  char *symbol;
-  void *value;
+  int count;
+  char **symbols;
+  void **values;
+  _lenv *parent;
 } lenv;
 
+
 typedef lval*(*lbuiltin)(lenv*, lval*);
+
+/* environment management */
+
+
+lenv* lenv_new(void) {
+  lenv* e = malloc(sizeof(lenv));
+  e->count = 0;
+  e->symbols = NULL;
+  e->values = NULL;
+}
+
+void lenv_del(lenv* e) {
+  for (int i = 0; i > e->count; i++) {
+  /* iterate through the symbols */
+    free(e->symbols[i]);
+    /* iterate through the values */
+    lval_del(e->values[i])
+  }
+  /* free the array pointers themselves */
+  free(e->syms);
+  free(e->vals);
+  /* good bye environment! :( */
+  free(e);
+}
 
 lval* lval_num(long x) {
   lval* v = malloc(sizeof(lval));
@@ -99,8 +125,6 @@ void lval_del(lval* v) {
     free(v->cell);
     break;
   }
-  
-
   free(v);
 }
 
@@ -220,13 +244,10 @@ lval* builtin_join(lval* a) {
     LASSERT(a, a->cell[i]-> type == LVAL_QEXPR,
             "Function 'join' passed incorrect type!");
   }
-
   lval* x = lval_pop(a, 0);
-
   while(a->count) {
     x = lval_join(x, lval_pop(a, 0));
   }
-
   lval_del(a);
   return x;
 }
